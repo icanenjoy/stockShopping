@@ -1080,10 +1080,23 @@ export class QuoteCache {
 }
 ```
 
+> **실행 중 정정 (2026-09-04, 커밋 d3200b0).** 아래 Step 3의 코드에는 결함이 있었다.
+> 진행 중인 요청에 편승한(piggyback) 호출자는 `missing` 분기를 타지 않아 `stale` 플래그가
+> 영영 `false`로 남고, 공유 요청이 실패하면 만료된 캐시를 최신인 것처럼 돌려주거나
+> 종목을 조용히 누락했다. 설계 문서의 "총액이 화면에서 사라지는 것이 최악이다" 원칙에
+> 어긋나므로 계획을 뒤집었다.
+>
+> 정정된 구현은 `stale`을 분기 안에서 세우지 않고 `get()` 마지막에 요청된 코드들을
+> `entries`와 대조해 유도한다 — 항목이 없으면 `stale = true`에 결과에서 제외, 만료됐으면
+> `stale = true`에 시세는 포함. `fresh` 배열은 쓰이지 않아 제거했다. 최초 호출자만
+> 캐시가 전혀 없을 때 throw하고, 편승 호출자는 throw 대신 `stale: true`로 응답한다.
+> 편승 + 실패 조합을 덮는 테스트 2개를 추가해 총 10개가 됐다.
+> 실제 코드는 `src/server/QuoteCache.ts`를 보라.
+
 - [ ] **Step 4: 테스트 실행해서 통과 확인**
 
 Run: `npx vitest run src/server/__tests__/QuoteCache.test.ts`
-Expected: PASS (8 tests)
+Expected: PASS (10 tests — 원래 8개 + 정정으로 추가된 2개)
 
 - [ ] **Step 5: 커밋**
 
