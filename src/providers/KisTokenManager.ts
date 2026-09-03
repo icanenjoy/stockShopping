@@ -46,17 +46,17 @@ export class KisTokenManager {
     if (this.cached && at < this.cached.expiresAt - this.refreshMarginMs) {
       return this.cached.value
     }
-    if (this.inflight) return this.inflight
 
-    this.inflight = this.issue()
+    const pending = this.inflight ?? this.issue()
+    this.inflight = pending
     try {
-      return await this.inflight
+      return await pending
     } catch (error) {
-      // 아직 만료 전이라면 기존 토큰으로 버틴다
+      // 아직 만료 전이라면 기존 토큰으로 버틴다 (초기 호출자·합류 호출자 모두 동일하게 적용)
       if (this.cached && at < this.cached.expiresAt) return this.cached.value
       throw error
     } finally {
-      this.inflight = null
+      if (this.inflight === pending) this.inflight = null
     }
   }
 

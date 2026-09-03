@@ -112,4 +112,24 @@ describe('KisTokenManager', () => {
     await expect(manager.getToken()).rejects.toThrow()
     expect(await manager.getToken()).toBe('T1')
   })
+
+  it('동시 호출 중 갱신이 실패하고 기존 토큰이 아직 만료 전이면, 두 호출자 모두 기존 토큰을 받는다', async () => {
+    let t = 0
+    let call = 0
+    const fetchFn = vi.fn(async () => {
+      call += 1
+      if (call === 1) return tokenResponse('T1')
+      await new Promise((r) => setTimeout(r, 10))
+      throw new Error('network down')
+    }) as unknown as typeof fetch
+    const manager = make(fetchFn, () => t)
+
+    await manager.getToken()
+    t = 86_400_000 - 60_000 // 만료 1분 전, 기본 여유 10분보다 짧다
+
+    const [a, b] = await Promise.all([manager.getToken(), manager.getToken()])
+
+    expect(a).toBe('T1')
+    expect(b).toBe('T1')
+  })
 })
