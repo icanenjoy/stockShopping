@@ -2866,7 +2866,7 @@ git commit -m "feat: 장바구니 컨텍스트와 공통 헤더·레이아웃 �
 - Create: `src/hooks/useStockSearch.ts`
 - Modify: `src/app/page.tsx` (create-next-app이 만든 파일 전체 교체)
 - Test: `src/hooks/__tests__/useStockSearch.test.tsx`
-- Test: `src/app/__tests__/page.test.tsx`
+- Test: `src/app/__tests__/home-page.test.tsx`
 
 **Interfaces:**
 - Consumes: `StockSummary` (Task 2), `useQuotes` (Task 10), `useCartContext` (Task 12), `StockCard` (Task 11)
@@ -3016,7 +3016,7 @@ Expected: PASS (5 tests)
 
 - [ ] **Step 5: 검색 화면 실패 테스트 작성**
 
-`src/app/__tests__/page.test.tsx`:
+`src/app/__tests__/home-page.test.tsx`:
 
 ```tsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -3114,7 +3114,7 @@ describe('검색 화면', () => {
 
 - [ ] **Step 6: 테스트 실행해서 실패 확인**
 
-Run: `npx vitest run src/app/__tests__/page.test.tsx`
+Run: `npx vitest run src/app/__tests__/home-page.test.tsx`
 Expected: FAIL — create-next-app 기본 페이지에는 검색창이 없어 `Unable to find role="searchbox"`
 
 - [ ] **Step 7: 검색 화면 구현**
@@ -3193,7 +3193,7 @@ export default function HomePage() {
 
 - [ ] **Step 8: 테스트 실행해서 통과 확인**
 
-Run: `npx vitest run src/app/__tests__/page.test.tsx`
+Run: `npx vitest run src/app/__tests__/home-page.test.tsx`
 Expected: PASS (4 tests)
 
 - [ ] **Step 9: 커밋**
@@ -3209,7 +3209,7 @@ git commit -m "feat: 종목 검색 화면 추가"
 
 **Files:**
 - Create: `src/app/cart/page.tsx`
-- Test: `src/app/cart/__tests__/page.test.tsx`
+- Test: `src/app/cart/__tests__/cart-page.test.tsx`
 
 **Interfaces:**
 - Consumes: `useCartContext` (Task 12), `useQuotes` (Task 10), `cartTotal`·`lineSubtotal`·`changeSinceAdded` (Task 2), `isMarketOpen` (Task 2), `QtyStepper` (Task 11), `formatWon`·`formatSignedPercent` (Task 11)
@@ -3219,7 +3219,7 @@ git commit -m "feat: 종목 검색 화면 추가"
 
 - [ ] **Step 1: 실패 테스트 작성**
 
-`src/app/cart/__tests__/page.test.tsx`:
+`src/app/cart/__tests__/cart-page.test.tsx`:
 
 ```tsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -3356,7 +3356,7 @@ describe('장바구니 화면', () => {
 
 - [ ] **Step 2: 테스트 실행해서 실패 확인**
 
-Run: `npx vitest run src/app/cart/__tests__/page.test.tsx`
+Run: `npx vitest run src/app/cart/__tests__/cart-page.test.tsx`
 Expected: FAIL — `Failed to resolve import "@/app/cart/page"`
 
 - [ ] **Step 3: 구현**
@@ -3488,7 +3488,7 @@ export default function CartPage() {
 
 - [ ] **Step 4: 테스트 실행해서 통과 확인**
 
-Run: `npx vitest run src/app/cart/__tests__/page.test.tsx`
+Run: `npx vitest run src/app/cart/__tests__/cart-page.test.tsx`
 Expected: PASS (7 tests)
 
 - [ ] **Step 5: 전체 테스트와 빌드 확인**
