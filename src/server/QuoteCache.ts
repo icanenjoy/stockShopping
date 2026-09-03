@@ -32,18 +32,16 @@ export class QuoteCache {
     loader: (missing: string[]) => Promise<Quote[]>,
   ): Promise<QuoteResult> {
     const at = this.now()
-    const fresh: string[] = []
     const pending: string[] = []
     const missing: string[] = []
 
     for (const code of codes) {
       const entry = this.entries.get(code)
-      if (entry && at - entry.storedAt < this.ttlMs) fresh.push(code)
+      if (entry && at - entry.storedAt < this.ttlMs) continue
       else if (this.inflight.has(code)) pending.push(code)
       else missing.push(code)
     }
 
-    let stale = false
     if (missing.length > 0) {
       // 조회와 저장을 하나의 프라미스로 묶는다. 동시 요청이 이 프라미스를 기다리면
       // 캐시에 값이 들어간 뒤에 깨어난다. 둘을 분리하면 나중 요청이 빈 캐시를 읽는다.
@@ -62,7 +60,6 @@ export class QuoteCache {
       } catch (error) {
         const anyCached = missing.some((code) => this.entries.has(code))
         if (!anyCached) throw error
-        stale = true
       } finally {
         for (const code of missing) this.inflight.delete(code)
       }
@@ -72,9 +69,21 @@ export class QuoteCache {
       await Promise.allSettled(pending.map((code) => this.inflight.get(code)))
     }
 
-    const quotes = codes
-      .map((code) => this.entries.get(code)?.quote)
-      .filter((q): q is Quote => q !== undefined)
+    // stale 여부는 대기(await)가 모두 끝난 뒤 entries를 다시 훑어 판정한다.
+    // missing 분기 안에서만 stale를 세우면 piggyback 호출(pending)은 자신이
+    // 실패/성공 어느 쪽에 편승했는지 알 방법이 없어 항상 stale: false로 응답하게 된다.
+    const settledAt = this.now()
+    let stale = false
+    const quotes: Quote[] = []
+    for (const code of codes) {
+      const entry = this.entries.get(code)
+      if (!entry) {
+        stale = true
+        continue
+      }
+      if (settledAt - entry.storedAt >= this.ttlMs) stale = true
+      quotes.push(entry.quote)
+    }
 
     return { quotes, stale }
   }

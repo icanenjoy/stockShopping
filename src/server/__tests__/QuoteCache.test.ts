@@ -116,4 +116,43 @@ describe('QuoteCache', () => {
     expect(result.quotes[0].price).toBe(2000)
     expect(result.stale).toBe(false)
   })
+
+  it('동시 요청 중 loader가 실패하고 만료된 캐시가 있으면 piggyback 호출도 stale로 캐시된 시세를 받는다', async () => {
+    let t = 0
+    const cache = new QuoteCache({ ttlMs: 5_000, now: () => t })
+    await cache.get(['005930'], async (codes) => codes.map((c) => quote(c, 1000)))
+
+    t = 10_000
+    const loader = async () => {
+      await new Promise((r) => setTimeout(r, 10))
+      throw new Error('KIS 장애')
+    }
+
+    const [a, b] = await Promise.all([cache.get(['005930'], loader), cache.get(['005930'], loader)])
+
+    expect(a.stale).toBe(true)
+    expect(a.quotes[0].price).toBe(1000)
+    expect(b.stale).toBe(true)
+    expect(b.quotes[0].price).toBe(1000)
+  })
+
+  it('캐시가 없는 상태에서 동시 요청 중 loader가 실패하면 첫 호출은 throw하고 piggyback 호출은 stale에 빈 quotes를 받는다', async () => {
+    const cache = new QuoteCache({ ttlMs: 5_000, now: () => 0 })
+    const loader = async () => {
+      await new Promise((r) => setTimeout(r, 10))
+      throw new Error('KIS 장애')
+    }
+
+    const [first, second] = await Promise.allSettled([
+      cache.get(['005930'], loader),
+      cache.get(['005930'], loader),
+    ])
+
+    expect(first.status).toBe('rejected')
+    expect(second.status).toBe('fulfilled')
+    if (second.status === 'fulfilled') {
+      expect(second.value.stale).toBe(true)
+      expect(second.value.quotes).toHaveLength(0)
+    }
+  })
 })
