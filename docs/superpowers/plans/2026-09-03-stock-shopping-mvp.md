@@ -1340,10 +1340,25 @@ export class KisTokenManager {
 }
 ```
 
+> **실행 중 정정 (2026-09-04, 커밋 5dad094).** 위 Step 3의 코드에는 Task 5와 같은 계열의
+> 결함이 있었다. `if (this.inflight) return this.inflight`가 `try/catch` 바깥에서 반환하기
+> 때문에, 진행 중인 발급에 편승한 호출자는 발급이 실패했을 때 폴백을 받지 못하고 예외를
+> 그대로 맞는다 — 아직 만료되지 않은 토큰이 캐시에 있어도 마찬가지다. 갱신을 시작한
+> 호출자만 보호받는 셈이라 스펙의 "토큰 실패에도 가진 것으로 계속 서빙한다"에 어긋난다.
+>
+> 정정된 구현은 편승 분기와 최초 분기를 하나의 `try/catch/finally`로 합친다.
+> `const pending = this.inflight ?? this.issue()`로 같은 프라미스를 얻어 각자의 `try`에서
+> await하므로 두 호출자 모두 같은 폴백을 탄다. `finally`는 `this.inflight === pending`일
+> 때만 슬롯을 비워, 편승 호출자가 더 나중 세대의 발급을 지우지 못하게 한다.
+> 신선도 판정은 마진을 뺀 `expiresAt - refreshMarginMs`, 폴백 판정은 마진 없는
+> `expiresAt`으로 서로 달라야 한다 — 합치면 폴백 경로가 죽는다.
+> 동시 호출 + 갱신 실패 조합을 덮는 테스트를 추가해 총 9개가 됐다.
+> 실제 코드는 `src/providers/KisTokenManager.ts`를 보라.
+
 - [ ] **Step 4: 테스트 실행해서 통과 확인**
 
 Run: `npx vitest run src/providers/__tests__/KisTokenManager.test.ts`
-Expected: PASS (8 tests)
+Expected: PASS (9 tests — 원래 8개 + 정정으로 추가된 1개)
 
 - [ ] **Step 5: 커밋**
 
