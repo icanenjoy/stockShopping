@@ -54,11 +54,15 @@ export class KisTokenManager {
       return this.cached.value
     }
 
-    // 방금 갱신에 실패했고 쓸 수 있는 토큰이 아직 남아 있다면, 쿨다운 동안은
-    // 토큰 엔드포인트를 두드리지 않는다. 갱신 여유(기본 10분) 내내 매 요청마다
-    // 재발급을 시도하면 KIS가 발급 빈도 제한으로 우리를 차단한다.
-    if (this.cached && at < this.cached.expiresAt && at < this.retryAfter) {
-      return this.cached.value
+    const usable = this.cached && at < this.cached.expiresAt ? this.cached : null
+
+    // 방금 발급에 실패했다면 쿨다운 동안은 토큰 엔드포인트를 두드리지 않는다.
+    // 쓸 수 있는 토큰이 남아 있으면 그것으로 버티고, 없으면 시도조차 하지 않고
+    // 실패한다. 여기서 굳이 다시 물어보면 KIS의 발급 빈도 제한(1분당 1회)에
+    // 걸린 상태에서 7초마다 재시도하게 되어, 한도가 영영 풀리지 않는다.
+    if (at < this.retryAfter) {
+      if (usable) return usable.value
+      throw new Error('KIS 토큰 발급 재시도 대기 중 — 직전 발급이 실패했습니다')
     }
 
     const pending = this.inflight ?? this.issue()
@@ -66,11 +70,11 @@ export class KisTokenManager {
     try {
       return await pending
     } catch (error) {
+      // 캐시가 있든 없든 쿨다운을 세운다. 토큰을 한 번도 못 받은 상태야말로
+      // 매 요청이 곧바로 재발급으로 이어지는, 가장 세게 두드리는 경우다.
+      this.retryAfter = at + this.retryCooldownMs
       // 아직 만료 전이라면 기존 토큰으로 버틴다 (초기 호출자·합류 호출자 모두 동일하게 적용)
-      if (this.cached && at < this.cached.expiresAt) {
-        this.retryAfter = at + this.retryCooldownMs
-        return this.cached.value
-      }
+      if (usable) return usable.value
       throw error
     } finally {
       if (this.inflight === pending) this.inflight = null

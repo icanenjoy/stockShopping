@@ -100,16 +100,24 @@ describe('KisTokenManager', () => {
     await expect(make(fetchFn, () => 0).getToken()).rejects.toThrow(/403/)
   })
 
-  it('발급 실패 뒤 다음 호출에서 다시 시도한다', async () => {
+  it('발급 실패 뒤 쿨다운이 지나면 다시 시도해 회복한다', async () => {
+    let t = 0
     let call = 0
     const fetchFn = vi.fn(async () => {
       call += 1
       if (call === 1) return new Response('oops', { status: 500 })
       return tokenResponse('T1')
     }) as unknown as typeof fetch
-    const manager = make(fetchFn, () => 0)
+    const manager = make(fetchFn, () => t)
 
     await expect(manager.getToken()).rejects.toThrow()
+
+    // 같은 순간에 곧바로 다시 물어봐도 발급을 시도하지 않는다 — 그것이 발급
+    // 빈도 제한에 걸린 상태를 스스로 연장시킨다
+    await expect(manager.getToken()).rejects.toThrow()
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+
+    t = 60_000
     expect(await manager.getToken()).toBe('T1')
   })
 
@@ -174,5 +182,89 @@ describe('KisTokenManager', () => {
 
     expect(a).toBe('T1')
     expect(b).toBe('T1')
+  })
+})
+
+/**
+ * KIS는 토큰 발급을 1분당 1회로 제한한다. 아직 토큰을 한 번도 못 받은 상태에서
+ * 발급이 막히면, 쿨다운 없이 매 요청마다 다시 두드리게 된다. 장바구니 화면은
+ * 7초마다 시세를 갱신하므로 그 한도는 영영 풀리지 않는다 — 스스로를 가둔다.
+ */
+describe('KisTokenManager — 발급 실패가 스스로를 키우지 않는다', () => {
+  function failing(status = 403) {
+    return vi.fn(async () => new Response('', { status })) as unknown as typeof fetch
+  }
+
+  it('토큰이 하나도 없는 상태에서 발급에 실패하면 쿨다운 동안 다시 두드리지 않는다', async () => {
+    let t = 0
+    const fetchFn = failing()
+    const manager = make(fetchFn, () => t)
+
+    await expect(manager.getToken()).rejects.toThrow()
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+
+    // 7초 뒤 폴링이 다시 물어봐도 발급을 시도하지 않는다
+    t = 7_000
+    await expect(manager.getToken()).rejects.toThrow()
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+
+    t = 14_000
+    await expect(manager.getToken()).rejects.toThrow()
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('쿨다운이 지나면 다시 발급을 시도한다', async () => {
+    let t = 0
+    const fetchFn = failing()
+    const manager = make(fetchFn, () => t)
+
+    await expect(manager.getToken()).rejects.toThrow()
+
+    t = 60_000
+    await expect(manager.getToken()).rejects.toThrow()
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('쿨다운이 끝나고 성공하면 정상으로 돌아온다', async () => {
+    let t = 0
+    let attempt = 0
+    const fetchFn = vi.fn(async () => {
+      attempt++
+      return attempt === 1 ? new Response('', { status: 403 }) : tokenResponse('T1')
+    }) as unknown as typeof fetch
+    const manager = make(fetchFn, () => t)
+
+    await expect(manager.getToken()).rejects.toThrow()
+
+    t = 60_000
+    expect(await manager.getToken()).toBe('T1')
+
+    // 이후로는 캐시를 쓴다
+    t = 61_000
+    expect(await manager.getToken()).toBe('T1')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('쿨다운 중에도 쓸 수 있는 토큰이 있으면 그것으로 버틴다', async () => {
+    let t = 0
+    let attempt = 0
+    const fetchFn = vi.fn(async () => {
+      attempt++
+      // 첫 발급은 성공, 갱신 시도는 계속 실패
+      return attempt === 1 ? tokenResponse('T1', 3600) : new Response('', { status: 403 })
+    }) as unknown as typeof fetch
+    const manager = make(fetchFn, () => t)
+
+    expect(await manager.getToken()).toBe('T1')
+
+    // 갱신 여유(10분) 안으로 들어가면 갱신을 시도하고, 실패해도 기존 토큰을 쓴다
+    t = 3_000_000
+    expect(await manager.getToken()).toBe('T1')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+
+    // 쿨다운 동안에는 재발급을 시도하지 않는다
+    t = 3_007_000
+    expect(await manager.getToken()).toBe('T1')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
   })
 })
