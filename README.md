@@ -30,6 +30,12 @@ cp .env.example .env.local
 # KIS_APP_KEY, KIS_APP_SECRET 채우기
 ```
 
+`KIS_BASE_URL`은 선택 항목이다. 비워두면 실전 서버로 붙는다.
+모의투자 계정을 쓴다면 `https://openapivts.koreainvestment.com:29443`을 직접 적어야 한다.
+
+앱키·시크릿이 없으면 가짜 시세로 동작하며, 서버 로그에
+`[provider] KIS 자격증명 없음 — MockProvider(가짜 시세)로 동작합니다` 경고가 남는다.
+
 ## 테스트
 
 ```bash
