@@ -2340,6 +2340,23 @@ export function useQuotes(codes: string[], opts: { pollMs?: number } = {}) {
 }
 ```
 
+> **실행 중 정정 (2026-09-04, 커밋 294a22a).** 위 Step 3의 코드는 React 19의
+> `react-hooks/set-state-in-effect` 규칙을 어긴다. `key === ''` 분기가 이펙트 본문에서
+> setState를 동기 호출하기 때문이다. Task 8까지 깨끗하던 `npm run lint`가 여기서 깨졌다.
+>
+> 정정된 구현은 그 리셋을 이펙트에서 빼고 **렌더 중 상태 조정** 패턴으로 옮긴다 —
+> `prevKey`를 상태로 들고 렌더 본문에서 `key !== prevKey && key === ''`일 때만 초기화한다.
+> 반환값을 파생시키는(예: `quotes: key === '' ? {} : quotes`) 손쉬운 해법은 쓰지 않았다.
+> 그 방식은 내부 상태를 실제로 비우지 않아, 코드 목록이 비었다가 다시 채워질 때 예전
+> quotes가 새 결과에 병합되어 되살아난다.
+>
+> 같은 커밋에서 죽은 `aliveRef`(어디서도 읽히지 않음)를 제거하고, 테스트의 미사용 매개변수를
+> `vi.fn<typeof fetch>(...)` 제네릭으로 대체했다. 또한 Task 9의 `useCart.ts` 하이드레이션
+> 이펙트에는 같은 규칙에 대해 범위를 좁힌 `eslint-disable-next-line`과 사유 주석을 달았다 —
+> SSR에는 localStorage가 없어 마운트 후 1회 읽기가 불가피하고, 구독 의미가 없는 이 자리에
+> `useSyncExternalStore`를 도입하는 것은 MVP에 과하다고 판정했다.
+> 실제 코드는 `src/hooks/useQuotes.ts`를 보라.
+
 - [ ] **Step 4: 테스트 실행해서 통과 확인**
 
 Run: `npx vitest run src/hooks/__tests__/useQuotes.test.tsx`
