@@ -63,12 +63,22 @@ describe('useStockSearch', () => {
     expect(result.current.stocks[0].name).toBe('삼성전자')
   })
 
-  it('요청이 실패하면 빈 결과로 둔다', async () => {
+  it('요청이 실패하면 빈 결과로 두되 실패했다는 사실을 알린다', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('boom', { status: 500 })))
 
     const { result } = renderHook(() => useStockSearch('삼성', { debounceMs: 0 }))
 
-    await waitFor(() => expect(result.current.loading).toBe(false))
+    await waitFor(() => expect(result.current.error).toBe(true))
+    expect(result.current.loading).toBe(false)
     expect(result.current.stocks).toEqual([])
+  })
+
+  it('성공한 조회에는 실패 표시가 남지 않는다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => searchResponse()))
+
+    const { result } = renderHook(() => useStockSearch('삼성', { debounceMs: 0 }))
+
+    await waitFor(() => expect(result.current.stocks).toHaveLength(1))
+    expect(result.current.error).toBe(false)
   })
 })

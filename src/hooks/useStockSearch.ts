@@ -10,6 +10,8 @@ export function useStockSearch(query: string, opts: { debounceMs?: number } = {}
   const trimmed = query.trim()
   const [stocks, setStocks] = useState<StockSummary[]>([])
   const [loading, setLoading] = useState(false)
+  /** 마지막 조회가 실패했는지. "결과 없음"과 "못 물어봤음"은 다른 이야기다 */
+  const [error, setError] = useState(false)
 
   // 렌더 도중 상태를 조정한다(React 공식 패턴): trimmed가 빈 문자열로 바뀐
   // 순간에만 이전 결과를 지운다. 이펙트에서 동기적으로 setState하지 않도록
@@ -20,6 +22,7 @@ export function useStockSearch(query: string, opts: { debounceMs?: number } = {}
     if (trimmed === '') {
       setStocks([])
       setLoading(false)
+      setError(false)
     }
   }
 
@@ -37,9 +40,17 @@ export function useStockSearch(query: string, opts: { debounceMs?: number } = {}
         const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`)
         if (!res.ok) throw new Error(`검색 실패: ${res.status}`)
         const body = (await res.json()) as { stocks: StockSummary[] }
-        if (!cancelled) setStocks(body.stocks)
+        if (!cancelled) {
+          setStocks(body.stocks)
+          setError(false)
+        }
       } catch {
-        if (!cancelled) setStocks([])
+        // 결과를 비우되 실패했다는 사실을 함께 싣는다. 이걸 잃어버리면 화면이
+        // "일치하는 종목이 없습니다"라고 확신에 차서 거짓말을 한다.
+        if (!cancelled) {
+          setStocks([])
+          setError(true)
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -51,5 +62,5 @@ export function useStockSearch(query: string, opts: { debounceMs?: number } = {}
     }
   }, [trimmed, debounceMs])
 
-  return { stocks, loading }
+  return { stocks, loading, error }
 }

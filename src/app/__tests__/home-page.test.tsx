@@ -88,4 +88,24 @@ describe('검색 화면', () => {
     renderHome()
     expect(screen.getByText(/종목명이나 코드를 검색해보세요/)).toBeInTheDocument()
   })
+
+  it('일치하는 종목이 없으면 없다고 말한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ stocks: [] }), { status: 200 })),
+    )
+    renderHome()
+    await userEvent.type(screen.getByRole('searchbox', { name: /종목 검색/ }), '없는종목')
+
+    expect(await screen.findByText(/일치하는 종목이 없습니다/)).toBeInTheDocument()
+  })
+
+  it('검색이 실패하면 종목이 없다고 말하지 않는다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('boom', { status: 500 })))
+    renderHome()
+    await userEvent.type(screen.getByRole('searchbox', { name: /종목 검색/ }), '삼성')
+
+    expect(await screen.findByText(/검색에 실패했습니다/)).toBeInTheDocument()
+    expect(screen.queryByText(/일치하는 종목이 없습니다/)).not.toBeInTheDocument()
+  })
 })

@@ -9,7 +9,7 @@ import { StockCard } from '@/components/StockCard'
 
 export default function HomePage() {
   const [query, setQuery] = useState('')
-  const { stocks, loading } = useStockSearch(query)
+  const { stocks, loading, error } = useStockSearch(query)
   const codes = useMemo(() => stocks.map((s) => s.code), [stocks])
   const { quotes } = useQuotes(codes)
   const { items, add } = useCartContext()
@@ -44,6 +44,10 @@ export default function HomePage() {
         <p className="py-16 text-center text-slate-400">종목명이나 코드를 검색해보세요</p>
       ) : loading && stocks.length === 0 ? (
         <p className="py-16 text-center text-slate-400">찾는 중…</p>
+      ) : error && stocks.length === 0 ? (
+        <p role="status" className="py-16 text-center text-amber-700">
+          ⚠️ 검색에 실패했습니다 — 잠시 뒤 다시 시도해주세요
+        </p>
       ) : stocks.length === 0 ? (
         <p className="py-16 text-center text-slate-400">일치하는 종목이 없습니다</p>
       ) : (
