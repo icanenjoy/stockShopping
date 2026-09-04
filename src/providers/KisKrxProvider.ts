@@ -48,6 +48,12 @@ export class KisKrxProvider implements PriceProvider {
 
     const settled = await Promise.allSettled(stocks.map((s) => this.fetchQuote(s)))
 
+    // 실패 사유를 통째로 버리면 잘못된 앱키·만료된 토큰·KIS 장애가 서버에
+    // 아무 흔적도 남기지 않는다. 화면에는 여전히 "시세 지연"만 뜬다.
+    for (const result of settled) {
+      if (result.status === 'rejected') console.error('[kis] 시세 조회 실패', result.reason)
+    }
+
     return settled
       .map((r) => (r.status === 'fulfilled' ? r.value : undefined))
       .filter((q): q is Quote => q !== undefined)

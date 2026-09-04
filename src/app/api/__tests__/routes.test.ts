@@ -1,13 +1,20 @@
 // @vitest-environment node
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { GET as searchGet } from '@/app/api/search/route'
 import { GET as quotesGet } from '@/app/api/quotes/route'
 import { resetProviderForTest } from '@/server/provider'
+import * as providerModule from '@/server/provider'
+import { QuoteCache } from '@/server/QuoteCache'
 
 beforeEach(() => {
   vi.stubEnv('KIS_APP_KEY', '')
   vi.stubEnv('KIS_APP_SECRET', '')
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   resetProviderForTest()
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 describe('GET /api/search', () => {
@@ -50,6 +57,26 @@ describe('GET /api/quotes', () => {
     const res = await quotesGet(new Request('http://localhost/api/quotes?codes=005930,,'))
 
     expect((await res.json()).quotes).toHaveLength(1)
+  })
+
+  it('시세를 하나도 못 가져오면 502와 고정 문구를 주고, 원인은 서버 로그에만 남긴다', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const failing = new QuoteCache({ ttlMs: 5_000 })
+    vi.spyOn(providerModule, 'getQuoteCache').mockReturnValue(failing)
+    vi.spyOn(providerModule, 'getProvider').mockReturnValue({
+      search: async () => [],
+      getQuotes: async () => {
+        throw new Error('appsecret=SUPERSECRET 로 인증 실패')
+      },
+    })
+
+    const res = await quotesGet(new Request('http://localhost/api/quotes?codes=005930'))
+    const body = await res.json()
+
+    expect(res.status).toBe(502)
+    expect(body).toEqual({ error: '시세를 가져오지 못했습니다' })
+    expect(JSON.stringify(body)).not.toMatch(/SUPERSECRET/)
+    expect(logged).toHaveBeenCalledWith('[api/quotes] 시세 조회 실패', expect.any(Error))
   })
 
   it('한 번에 조회할 수 있는 종목 수를 제한한다', async () => {

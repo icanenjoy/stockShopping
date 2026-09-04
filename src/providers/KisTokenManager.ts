@@ -9,6 +9,8 @@ interface TokenResponseBody {
 }
 
 const DEFAULT_REFRESH_MARGIN_MS = 10 * 60 * 1000
+/** 갱신에 실패했을 때 다음 재발급까지 기다리는 시간 */
+const DEFAULT_RETRY_COOLDOWN_MS = 60 * 1000
 
 /**
  * KIS 접근토큰을 발급받아 캐싱한다.
@@ -17,6 +19,8 @@ const DEFAULT_REFRESH_MARGIN_MS = 10 * 60 * 1000
 export class KisTokenManager {
   private cached: CachedToken | null = null
   private inflight: Promise<string> | null = null
+  /** 이 시각 전에는 재발급을 시도하지 않는다. 발급 실패 직후에만 세워진다 */
+  private retryAfter = 0
 
   private readonly appKey: string
   private readonly appSecret: string
@@ -24,6 +28,7 @@ export class KisTokenManager {
   private readonly fetchFn: typeof fetch
   private readonly now: () => number
   private readonly refreshMarginMs: number
+  private readonly retryCooldownMs: number
 
   constructor(opts: {
     appKey: string
@@ -32,6 +37,7 @@ export class KisTokenManager {
     fetchFn?: typeof fetch
     now?: () => number
     refreshMarginMs?: number
+    retryCooldownMs?: number
   }) {
     this.appKey = opts.appKey
     this.appSecret = opts.appSecret
@@ -39,11 +45,19 @@ export class KisTokenManager {
     this.fetchFn = opts.fetchFn ?? fetch
     this.now = opts.now ?? (() => Date.now())
     this.refreshMarginMs = opts.refreshMarginMs ?? DEFAULT_REFRESH_MARGIN_MS
+    this.retryCooldownMs = opts.retryCooldownMs ?? DEFAULT_RETRY_COOLDOWN_MS
   }
 
   async getToken(): Promise<string> {
     const at = this.now()
     if (this.cached && at < this.cached.expiresAt - this.refreshMarginMs) {
+      return this.cached.value
+    }
+
+    // 방금 갱신에 실패했고 쓸 수 있는 토큰이 아직 남아 있다면, 쿨다운 동안은
+    // 토큰 엔드포인트를 두드리지 않는다. 갱신 여유(기본 10분) 내내 매 요청마다
+    // 재발급을 시도하면 KIS가 발급 빈도 제한으로 우리를 차단한다.
+    if (this.cached && at < this.cached.expiresAt && at < this.retryAfter) {
       return this.cached.value
     }
 
@@ -53,7 +67,10 @@ export class KisTokenManager {
       return await pending
     } catch (error) {
       // 아직 만료 전이라면 기존 토큰으로 버틴다 (초기 호출자·합류 호출자 모두 동일하게 적용)
-      if (this.cached && at < this.cached.expiresAt) return this.cached.value
+      if (this.cached && at < this.cached.expiresAt) {
+        this.retryAfter = at + this.retryCooldownMs
+        return this.cached.value
+      }
       throw error
     } finally {
       if (this.inflight === pending) this.inflight = null
@@ -76,6 +93,7 @@ export class KisTokenManager {
     }
 
     const body = (await response.json()) as TokenResponseBody
+    this.retryAfter = 0
     this.cached = {
       value: body.access_token,
       expiresAt: this.now() + body.expires_in * 1000,

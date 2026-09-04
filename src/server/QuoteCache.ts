@@ -58,7 +58,9 @@ export class QuoteCache {
       try {
         await request
       } catch (error) {
-        const anyCached = missing.some((code) => this.entries.has(code))
+        // 판정 범위는 호출자가 요청한 전체 코드다. missing만 훑으면 캐시가 신선한
+        // 다른 종목까지 502로 함께 버려진다.
+        const anyCached = codes.some((code) => this.entries.has(code))
         if (!anyCached) throw error
       } finally {
         for (const code of missing) this.inflight.delete(code)

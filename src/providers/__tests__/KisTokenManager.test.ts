@@ -113,6 +113,49 @@ describe('KisTokenManager', () => {
     expect(await manager.getToken()).toBe('T1')
   })
 
+  it('갱신에 실패하면 쿨다운 동안 토큰 엔드포인트를 다시 두드리지 않는다', async () => {
+    let t = 0
+    let call = 0
+    const fetchFn = vi.fn(async () => {
+      call += 1
+      if (call === 1) return tokenResponse('T1')
+      throw new Error('network down')
+    }) as unknown as typeof fetch
+    const manager = make(fetchFn, () => t)
+
+    await manager.getToken()
+    t = 86_400_000 - 60_000 // 만료 1분 전, 갱신 여유(10분) 안이라 매번 갱신을 시도한다
+    expect(await manager.getToken()).toBe('T1')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+
+    // 쿨다운(1분) 안에서는 몇 번을 물어도 발급 요청이 나가지 않는다
+    t += 1_000
+    expect(await manager.getToken()).toBe('T1')
+    t += 1_000
+    expect(await manager.getToken()).toBe('T1')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('쿨다운이 지나면 다시 갱신을 시도한다', async () => {
+    let t = 0
+    let call = 0
+    const fetchFn = vi.fn(async () => {
+      call += 1
+      if (call === 2) throw new Error('network down')
+      return tokenResponse(`T${call}`)
+    }) as unknown as typeof fetch
+    const manager = make(fetchFn, () => t)
+
+    await manager.getToken()
+    t = 86_400_000 - 600_000 // 만료 10분 전
+    expect(await manager.getToken()).toBe('T1')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+
+    t += 60_001
+    expect(await manager.getToken()).toBe('T3')
+    expect(fetchFn).toHaveBeenCalledTimes(3)
+  })
+
   it('동시 호출 중 갱신이 실패하고 기존 토큰이 아직 만료 전이면, 두 호출자 모두 기존 토큰을 받는다', async () => {
     let t = 0
     let call = 0

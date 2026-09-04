@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { KisKrxProvider } from '@/providers/KisKrxProvider'
 import { KisTokenManager } from '@/providers/KisTokenManager'
 import type { StockSummary } from '@/domain/types'
@@ -41,6 +41,10 @@ function makeProvider(fetchFn: typeof fetch) {
     fetchFn,
   })
 }
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('KisKrxProvider', () => {
   it('검색은 로컬 종목 마스터를 쓰고 네트워크를 타지 않는다', async () => {
@@ -122,6 +126,7 @@ describe('KisKrxProvider', () => {
   })
 
   it('한 종목이 실패해도 나머지 종목은 살린다', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     let call = 0
     const fetchFn = vi.fn(async () => {
       call += 1
@@ -133,6 +138,16 @@ describe('KisKrxProvider', () => {
 
     expect(quotes).toHaveLength(1)
     expect(quotes[0].code).toBe('000660')
+  })
+
+  it('실패한 종목의 사유를 서버 로그에 남긴다', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchFn = vi.fn(async () => new Response('boom', { status: 500 })) as unknown as typeof fetch
+
+    await makeProvider(fetchFn).getQuotes(['005930'])
+
+    expect(logged).toHaveBeenCalledWith('[kis] 시세 조회 실패', expect.any(Error))
+    expect(String(logged.mock.calls[0][1])).toMatch(/005930 500/)
   })
 
   it('rt_cd가 0이 아니면 그 종목은 결과에서 뺀다', async () => {

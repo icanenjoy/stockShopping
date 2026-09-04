@@ -90,6 +90,22 @@ describe('QuoteCache', () => {
     expect(result.stale).toBe(true)
   })
 
+  it('요청한 다른 종목의 캐시가 신선하면 loader 실패에도 그 시세를 살려서 돌려준다', async () => {
+    let t = 0
+    const cache = new QuoteCache({ ttlMs: 5_000, now: () => t })
+    await cache.get(['005930'], async (codes) => codes.map((c) => quote(c, 1000)))
+
+    // 005930은 아직 신선하고 000660만 새로 조회한다. 그 조회가 실패해도
+    // 이미 갖고 있는 005930까지 502로 함께 버려서는 안 된다.
+    t = 1_000
+    const result = await cache.get(['005930', '000660'], async () => {
+      throw new Error('KIS 장애')
+    })
+
+    expect(result.quotes.map((q) => q.code)).toEqual(['005930'])
+    expect(result.stale).toBe(true)
+  })
+
   it('loader가 실패하고 캐시도 없으면 에러를 던진다', async () => {
     const cache = new QuoteCache({ ttlMs: 5_000, now: () => 0 })
     await expect(
