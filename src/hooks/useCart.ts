@@ -33,6 +33,8 @@ export function useCart() {
 
   // 서버 렌더링에는 localStorage가 없으므로 마운트 후에 복원한다
   useEffect(() => {
+    // SSR에는 localStorage가 없어 마운트 후 한 번만 읽는다
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setItems(load())
     setReady(true)
   }, [])

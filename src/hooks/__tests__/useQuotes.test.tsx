@@ -41,7 +41,7 @@ describe('useQuotes', () => {
   })
 
   it('요청 URL에 코드를 콤마로 이어 붙인다', async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => quotesResponse(61200))
+    const fetchMock = vi.fn<typeof fetch>(async () => quotesResponse(61200))
     vi.stubGlobal('fetch', fetchMock)
     renderHook(() => useQuotes(['005930', '000660']))
 

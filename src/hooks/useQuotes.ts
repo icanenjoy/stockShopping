@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Quote } from '@/domain/types'
 
 interface QuotesResponse {
@@ -19,22 +19,22 @@ export function useQuotes(codes: string[], opts: { pollMs?: number } = {}) {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
   const [stale, setStale] = useState(false)
   const [loading, setLoading] = useState(false)
-  const aliveRef = useRef(true)
 
-  useEffect(() => {
-    aliveRef.current = true
-    return () => {
-      aliveRef.current = false
-    }
-  }, [])
-
-  useEffect(() => {
+  // 렌더 도중 상태를 조정한다(React 공식 패턴): key가 빈 문자열로 바뀐
+  // 순간에만 이전 시세를 지운다. 이펙트에서 동기적으로 setState하지 않도록
+  // 하기 위함이며, 빈 목록이 아닌 다른 목록으로 바뀔 때는 지우지 않는다.
+  const [prevKey, setPrevKey] = useState(key)
+  if (key !== prevKey) {
+    setPrevKey(key)
     if (key === '') {
       setQuotes({})
       setStale(false)
       setLoading(false)
-      return
     }
+  }
+
+  useEffect(() => {
+    if (key === '') return
 
     let cancelled = false
 
