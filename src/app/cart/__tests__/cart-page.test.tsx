@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CartPage from '@/app/cart/page'
 import { CartProvider } from '@/components/CartProvider'
@@ -14,38 +14,45 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-function seedCart() {
+type SeedItem = { code: string; qty: number; addedPrice: number }
+
+function seedCart(items: SeedItem[] = [{ code: '005930', qty: 2, addedPrice: 60000 }]) {
   localStorage.setItem(
     CART_STORAGE_KEY,
-    JSON.stringify([
-      { code: '005930', qty: 2, addedPrice: 60000, addedAt: '2026-09-03T04:00:00.000Z' },
-    ]),
+    JSON.stringify(items.map((i) => ({ ...i, addedAt: '2026-09-03T04:00:00.000Z' }))),
+  )
+}
+
+const SAMSUNG = {
+  code: '005930',
+  name: '삼성전자',
+  price: 61200,
+  prevClose: 62600,
+  high52w: 85000,
+  tradingHalted: false,
+  asOf: '2026-09-03T05:00:00.000Z',
+}
+
+const HYNIX = {
+  code: '000660',
+  name: 'SK하이닉스',
+  price: 200000,
+  prevClose: 198000,
+  high52w: 260000,
+  tradingHalted: false,
+  asOf: '2026-09-03T05:00:00.000Z',
+}
+
+/** 응답 본문을 직접 정하고 싶을 때 쓴다 */
+function stubQuotesBody(quotes: unknown[], stale = false) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify({ quotes, stale }), { status: 200 })),
   )
 }
 
 function stubQuotes(stale = false) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          quotes: [
-            {
-              code: '005930',
-              name: '삼성전자',
-              price: 61200,
-              prevClose: 62600,
-              high52w: 85000,
-              tradingHalted: false,
-              asOf: '2026-09-03T05:00:00.000Z',
-            },
-          ],
-          stale,
-        }),
-        { status: 200 },
-      ),
-    ),
-  )
+  stubQuotesBody([SAMSUNG], stale)
 }
 
 beforeEach(() => {
@@ -85,8 +92,9 @@ describe('장바구니 화면', () => {
     stubQuotes()
     renderCart()
 
-    const total = await screen.findByTestId('cart-total')
-    expect(total).toHaveTextContent('122,400원')
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-total')).toHaveTextContent('122,400원'),
+    )
   })
 
   it('담은 뒤 변동률을 보여준다', async () => {
@@ -126,5 +134,102 @@ describe('장바구니 화면', () => {
 
     expect(await screen.findByText(/시세 지연/)).toBeInTheDocument()
     expect(screen.getByTestId('cart-total')).toHaveTextContent('122,400원')
+    expect(screen.queryByText(/시세를 가져오지 못했습니다/)).not.toBeInTheDocument()
+  })
+
+  it('조회에 실패해도 직전 총액을 지우지 않고 지연을 알린다', async () => {
+    seedCart([
+      { code: '005930', qty: 2, addedPrice: 60000 },
+      { code: '000660', qty: 1, addedPrice: 190000 },
+    ])
+    let call = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        call += 1
+        if (call === 1) {
+          return new Response(JSON.stringify({ quotes: [SAMSUNG, HYNIX], stale: false }), {
+            status: 200,
+          })
+        }
+        throw new Error('offline')
+      }),
+    )
+    renderCart()
+
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-total')).toHaveTextContent('322,400원'),
+    )
+
+    // 종목을 빼면 코드 목록이 바뀌어 재조회가 나가고, 그 조회가 실패한다
+    await userEvent.click(screen.getByRole('button', { name: 'SK하이닉스 빼기' }))
+
+    expect(await screen.findByText(/시세 지연/)).toBeInTheDocument()
+    expect(screen.getByTestId('cart-total')).toHaveTextContent('122,400원')
+  })
+
+  it('시세를 하나도 못 가져오면 0원 대신 못 가져왔다고 말한다', async () => {
+    seedCart()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('offline')
+      }),
+    )
+    renderCart()
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '시세를 가져오지 못했습니다 — 총액을 계산할 수 없습니다',
+    )
+
+    const total = screen.getByTestId('cart-total')
+    expect(total).not.toHaveTextContent('0원')
+    expect(total).toHaveTextContent('시세 없음')
+  })
+
+  it('응답에 빠진 종목은 제외 사실을 행과 총액 양쪽에 표시한다', async () => {
+    seedCart([
+      { code: '005930', qty: 2, addedPrice: 60000 },
+      { code: '000660', qty: 1, addedPrice: 190000 },
+    ])
+    stubQuotesBody([SAMSUNG])
+    renderCart()
+
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-total')).toHaveTextContent('122,400원'),
+    )
+    // 총액 옆: 몇 개가 빠졌는지
+    expect(screen.getByTestId('cart-unpriced')).toHaveTextContent(
+      '1개 종목 시세 없음 · 총액에서 제외했습니다',
+    )
+    // 행: 로딩이 아니라 제외됐다고 말한다
+    expect(
+      screen.getByText('시세를 가져오지 못했습니다 — 총액에서 제외했습니다'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/시세 조회 중…/)).not.toBeInTheDocument()
+  })
+
+  it('거래정지 종목은 경고와 함께 남기되 총액에서 뺀다', async () => {
+    seedCart([
+      { code: '005930', qty: 2, addedPrice: 60000 },
+      { code: '000660', qty: 1, addedPrice: 190000 },
+    ])
+    stubQuotesBody([SAMSUNG, { ...HYNIX, tradingHalted: true }])
+    renderCart()
+
+    expect(await screen.findByText('거래정지 — 총액에서 제외했습니다')).toBeInTheDocument()
+    expect(screen.getByText('SK하이닉스')).toBeInTheDocument()
+    // 200,000원이 더해졌다면 322,400원이 됐을 것이다
+    expect(screen.getByTestId('cart-total')).toHaveTextContent('122,400원')
+  })
+
+  it('전 종목이 거래정지면 0원 대신 이유를 말한다', async () => {
+    seedCart()
+    stubQuotesBody([{ ...SAMSUNG, tradingHalted: true }])
+    renderCart()
+
+    const total = await screen.findByTestId('cart-total')
+    await waitFor(() => expect(total).toHaveTextContent(/거래정지/))
+    expect(total).not.toHaveTextContent('0원')
   })
 })

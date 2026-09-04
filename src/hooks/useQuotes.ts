@@ -19,6 +19,11 @@ export function useQuotes(codes: string[], opts: { pollMs?: number } = {}) {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
   const [stale, setStale] = useState(false)
   const [loading, setLoading] = useState(false)
+  /**
+   * 현재 코드 목록으로 조회를 한 번이라도 끝냈는지(성공·실패 무관).
+   * 화면이 "아직 안 왔다"와 "받아봤는데 이 종목 시세가 없다"를 구분하려면 필요하다.
+   */
+  const [settled, setSettled] = useState(false)
 
   // 렌더 도중 상태를 조정한다(React 공식 패턴): key가 빈 문자열로 바뀐
   // 순간에만 이전 시세를 지운다. 이펙트에서 동기적으로 setState하지 않도록
@@ -26,6 +31,9 @@ export function useQuotes(codes: string[], opts: { pollMs?: number } = {}) {
   const [prevKey, setPrevKey] = useState(key)
   if (key !== prevKey) {
     setPrevKey(key)
+    // 목록이 바뀌면 아직 이 목록으로는 아무것도 확인하지 못한 상태다.
+    // 시세는 지우지 않는다 — 총액이 사라지는 것이 최악이다.
+    setSettled(false)
     if (key === '') {
       setQuotes({})
       setStale(false)
@@ -55,7 +63,10 @@ export function useQuotes(codes: string[], opts: { pollMs?: number } = {}) {
       } catch {
         if (!cancelled) setStale(true)
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setSettled(true)
+        }
       }
     }
 
@@ -72,5 +83,5 @@ export function useQuotes(codes: string[], opts: { pollMs?: number } = {}) {
     }
   }, [key, pollMs])
 
-  return { quotes, stale, loading }
+  return { quotes, stale, loading, settled }
 }
