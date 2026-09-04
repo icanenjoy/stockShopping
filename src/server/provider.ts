@@ -1,6 +1,8 @@
 import type { PriceProvider } from '@/providers/PriceProvider'
 import { MockProvider } from '@/providers/MockProvider'
+import { KisProvider } from '@/providers/KisProvider'
 import { KisKrxProvider } from '@/providers/KisKrxProvider'
+import { KisOverseasProvider } from '@/providers/KisOverseasProvider'
 import { KisTokenManager } from '@/providers/KisTokenManager'
 import { QuoteCache } from './QuoteCache'
 
@@ -34,11 +36,14 @@ export function getProvider(): PriceProvider {
     return provider
   }
 
-  provider = new KisKrxProvider({
-    tokenManager: new KisTokenManager({ appKey, appSecret, baseUrl }),
-    appKey,
-    appSecret,
-    baseUrl,
+  // 토큰은 국내·해외가 공유한다. KIS는 발급 빈도를 제한하므로 시장마다 따로
+  // 발급받으면 곧바로 한도에 걸린다.
+  const tokenManager = new KisTokenManager({ appKey, appSecret, baseUrl })
+  const credentials = { tokenManager, appKey, appSecret, baseUrl }
+
+  provider = new KisProvider({
+    domestic: new KisKrxProvider(credentials),
+    overseas: new KisOverseasProvider(credentials),
   })
   return provider
 }

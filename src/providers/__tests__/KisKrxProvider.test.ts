@@ -6,8 +6,8 @@ import type { StockSummary } from '@/domain/types'
 const BASE = 'https://openapi.example.com'
 
 const master: StockSummary[] = [
-  { code: '005930', name: '삼성전자', market: 'KOSPI' },
-  { code: '000660', name: 'SK하이닉스', market: 'KOSPI' },
+  { code: '005930', name: '삼성전자', market: 'KOSPI', currency: 'KRW' },
+  { code: '000660', name: 'SK하이닉스', market: 'KOSPI', currency: 'KRW' },
 ]
 
 function priceResponse(over: Record<string, string> = {}) {
@@ -37,7 +37,6 @@ function makeProvider(fetchFn: typeof fetch) {
     appKey: 'KEY',
     appSecret: 'SECRET',
     baseUrl: BASE,
-    master,
     fetchFn,
   })
 }
@@ -47,17 +46,15 @@ afterEach(() => {
 })
 
 describe('KisKrxProvider', () => {
-  it('검색은 로컬 종목 마스터를 쓰고 네트워크를 타지 않는다', async () => {
-    const fetchFn = vi.fn() as unknown as typeof fetch
-    const result = await makeProvider(fetchFn).search('삼성')
-
-    expect(result).toEqual([master[0]])
-    expect(fetchFn).not.toHaveBeenCalled()
+  it('통화를 KRW로 표시한다 — 달러와 섞이면 총액이 거짓이 된다', async () => {
+    const fetchFn = vi.fn(async () => priceResponse()) as unknown as typeof fetch
+    const [quote] = await makeProvider(fetchFn).getQuotes([master[0]])
+    expect(quote.currency).toBe('KRW')
   })
 
   it('KIS 응답을 Quote로 변환한다', async () => {
     const fetchFn = vi.fn(async () => priceResponse()) as unknown as typeof fetch
-    const [quote] = await makeProvider(fetchFn).getQuotes(['005930'])
+    const [quote] = await makeProvider(fetchFn).getQuotes([master[0]])
 
     expect(quote).toMatchObject({
       code: '005930',
@@ -74,14 +71,14 @@ describe('KisKrxProvider', () => {
     const fetchFn = vi.fn(async () =>
       priceResponse({ hts_kor_isnm: '엉뚱한이름' }),
     ) as unknown as typeof fetch
-    const [quote] = await makeProvider(fetchFn).getQuotes(['005930'])
+    const [quote] = await makeProvider(fetchFn).getQuotes([master[0]])
 
     expect(quote.name).toBe('삼성전자')
   })
 
   it('인증 헤더와 조회 파라미터를 규격대로 보낸다', async () => {
     const fetchFn = vi.fn(async () => priceResponse()) as unknown as typeof fetch
-    await makeProvider(fetchFn).getQuotes(['005930'])
+    await makeProvider(fetchFn).getQuotes([master[0]])
 
     const [url, init] = (fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
     expect(String(url)).toBe(
@@ -96,7 +93,7 @@ describe('KisKrxProvider', () => {
 
   it('temp_stop_yn이 Y이면 거래정지로 표시한다', async () => {
     const fetchFn = vi.fn(async () => priceResponse({ temp_stop_yn: 'Y' })) as unknown as typeof fetch
-    const [quote] = await makeProvider(fetchFn).getQuotes(['005930'])
+    const [quote] = await makeProvider(fetchFn).getQuotes([master[0]])
 
     expect(quote.tradingHalted).toBe(true)
   })
@@ -112,18 +109,11 @@ describe('KisKrxProvider', () => {
           { status: 200 },
         ),
     ) as unknown as typeof fetch
-    const [quote] = await makeProvider(fetchFn).getQuotes(['005930'])
+    const [quote] = await makeProvider(fetchFn).getQuotes([master[0]])
 
     expect(quote.tradingHalted).toBe(false)
   })
 
-  it('마스터에 없는 코드는 조회하지 않고 건너뛴다', async () => {
-    const fetchFn = vi.fn(async () => priceResponse()) as unknown as typeof fetch
-    const quotes = await makeProvider(fetchFn).getQuotes(['999999'])
-
-    expect(quotes).toEqual([])
-    expect(fetchFn).not.toHaveBeenCalled()
-  })
 
   it('한 종목이 실패해도 나머지 종목은 살린다', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -134,7 +124,7 @@ describe('KisKrxProvider', () => {
       return priceResponse({ stck_prpr: '205000' })
     }) as unknown as typeof fetch
 
-    const quotes = await makeProvider(fetchFn).getQuotes(['005930', '000660'])
+    const quotes = await makeProvider(fetchFn).getQuotes(master)
 
     expect(quotes).toHaveLength(1)
     expect(quotes[0].code).toBe('000660')
@@ -144,9 +134,9 @@ describe('KisKrxProvider', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     const fetchFn = vi.fn(async () => new Response('boom', { status: 500 })) as unknown as typeof fetch
 
-    await makeProvider(fetchFn).getQuotes(['005930'])
+    await makeProvider(fetchFn).getQuotes([master[0]])
 
-    expect(logged).toHaveBeenCalledWith('[kis] 시세 조회 실패', expect.any(Error))
+    expect(logged).toHaveBeenCalledWith('[kis:국내] 시세 조회 실패', expect.any(Error))
     expect(String(logged.mock.calls[0][1])).toMatch(/005930 500/)
   })
 
@@ -158,6 +148,6 @@ describe('KisKrxProvider', () => {
         }),
     ) as unknown as typeof fetch
 
-    expect(await makeProvider(fetchFn).getQuotes(['005930'])).toEqual([])
+    expect(await makeProvider(fetchFn).getQuotes([master[0]])).toEqual([])
   })
 })

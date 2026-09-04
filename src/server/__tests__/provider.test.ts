@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { getProvider, resetProviderForTest } from '@/server/provider'
 import { MockProvider } from '@/providers/MockProvider'
-import { KisKrxProvider } from '@/providers/KisKrxProvider'
+import { KisProvider } from '@/providers/KisProvider'
 
 beforeEach(() => {
   resetProviderForTest()
@@ -21,7 +21,7 @@ describe('getProvider', () => {
     vi.stubEnv('KIS_APP_SECRET', 'SECRET')
     vi.stubEnv('KIS_BASE_URL', 'https://openapivts.koreainvestment.com:29443')
 
-    expect(getProvider()).toBeInstanceOf(KisKrxProvider)
+    expect(getProvider()).toBeInstanceOf(KisProvider)
   })
 
   it('KIS_BASE_URL이 없어도 자격증명만 있으면 가짜 시세로 내려앉지 않는다', () => {
@@ -29,7 +29,7 @@ describe('getProvider', () => {
     vi.stubEnv('KIS_APP_SECRET', 'SECRET')
     vi.stubEnv('KIS_BASE_URL', '')
 
-    expect(getProvider()).toBeInstanceOf(KisKrxProvider)
+    expect(getProvider()).toBeInstanceOf(KisProvider)
   })
 
   it('자격증명이 없으면 MockProvider로 내려가고 경고를 남긴다', () => {

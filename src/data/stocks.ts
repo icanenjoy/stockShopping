@@ -1,35 +1,19 @@
 import type { StockSummary } from '@/domain/types'
+import generated from './stocks.generated.json'
 
-/** MVP용 종목 마스터. 추후 KRX 전체 마스터로 교체한다 */
-export const STOCK_MASTER: StockSummary[] = [
-  { code: '005930', name: '삼성전자', market: 'KOSPI' },
-  { code: '000660', name: 'SK하이닉스', market: 'KOSPI' },
-  { code: '373220', name: 'LG에너지솔루션', market: 'KOSPI' },
-  { code: '207940', name: '삼성바이오로직스', market: 'KOSPI' },
-  { code: '005380', name: '현대차', market: 'KOSPI' },
-  { code: '005490', name: 'POSCO홀딩스', market: 'KOSPI' },
-  { code: '000270', name: '기아', market: 'KOSPI' },
-  { code: '068270', name: '셀트리온', market: 'KOSPI' },
-  { code: '035420', name: 'NAVER', market: 'KOSPI' },
-  { code: '105560', name: 'KB금융', market: 'KOSPI' },
-  { code: '012330', name: '현대모비스', market: 'KOSPI' },
-  { code: '051910', name: 'LG화학', market: 'KOSPI' },
-  { code: '028260', name: '삼성물산', market: 'KOSPI' },
-  { code: '055550', name: '신한지주', market: 'KOSPI' },
-  { code: '035720', name: '카카오', market: 'KOSPI' },
-  { code: '006400', name: '삼성SDI', market: 'KOSPI' },
-  { code: '003670', name: '포스코퓨처엠', market: 'KOSPI' },
-  { code: '086790', name: '하나금융지주', market: 'KOSPI' },
-  { code: '015760', name: '한국전력', market: 'KOSPI' },
-  { code: '034020', name: '두산에너빌리티', market: 'KOSPI' },
-  { code: '009150', name: '삼성전기', market: 'KOSPI' },
-  { code: '033780', name: 'KT&G', market: 'KOSPI' },
-  { code: '316140', name: '우리금융지주', market: 'KOSPI' },
-  { code: '018260', name: '삼성에스디에스', market: 'KOSPI' },
-  { code: '010130', name: '고려아연', market: 'KOSPI' },
-  { code: '247540', name: '에코프로비엠', market: 'KOSDAQ' },
-  { code: '086520', name: '에코프로', market: 'KOSDAQ' },
-  { code: '196170', name: '알테오젠', market: 'KOSDAQ' },
-  { code: '091990', name: '셀트리온헬스케어', market: 'KOSDAQ' },
-  { code: '028300', name: 'HLB', market: 'KOSDAQ' },
-]
+/**
+ * 국내·해외 종목 마스터. `npm run build:master`가 KIS 배포 파일에서 생성한다.
+ *
+ * 서버에서만 읽는다 — 1MB에 가까운 데이터를 브라우저로 내려보낼 이유가 없다.
+ * 검색은 /api/search가 대신 수행한다.
+ */
+export const STOCK_MASTER: StockSummary[] = generated.stocks as StockSummary[]
+
+/** 마스터를 생성한 시각. 상장·폐지가 얼마나 오래된 기준인지 말해준다 */
+export const MASTER_GENERATED_AT: string = generated.generatedAt
+
+const BY_CODE = new Map(STOCK_MASTER.map((stock) => [stock.code, stock]))
+
+export function findStock(code: string): StockSummary | undefined {
+  return BY_CODE.get(code)
+}

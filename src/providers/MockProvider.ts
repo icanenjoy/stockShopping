@@ -41,16 +41,21 @@ export class MockProvider implements PriceProvider {
 
   private quoteFor(stock: StockSummary, at: number): Quote {
     const seed = hash(stock.code)
-    const high52w = 20_000 + (seed % 180) * 1_000
+    // 통화에 맞는 자릿수라야 화면이 그럴듯하다. 달러 종목에 20만이 찍히면
+    // 가짜라는 사실보다 먼저 버그로 읽힌다.
+    const high52w =
+      stock.currency === 'KRW' ? 20_000 + (seed % 180) * 1_000 : 20 + (seed % 180) * 2
 
     // 정가의 55~95% 사이를 천천히 오간다
     const phase = Math.sin(seed + Math.floor(at / TICK_MS) / 40)
     const ratio = 0.75 + phase * 0.2
-    const price = Math.round((high52w * ratio) / 10) * 10
+    const round = (value: number) =>
+      stock.currency === 'KRW' ? Math.round(value / 10) * 10 : Math.round(value * 100) / 100
+    const price = round(high52w * ratio)
 
     // 전일 종가는 현재가 대비 ±3% 안에서 흔들린다
     const prevPhase = Math.sin(seed * 1.7 + Math.floor(at / TICK_MS) / 40 - 1)
-    const prevClose = Math.round((price * (1 + prevPhase * 0.03)) / 10) * 10
+    const prevClose = round(price * (1 + prevPhase * 0.03))
 
     return {
       code: stock.code,
@@ -59,6 +64,7 @@ export class MockProvider implements PriceProvider {
       prevClose,
       high52w,
       tradingHalted: false,
+      currency: stock.currency,
       asOf: new Date(at).toISOString(),
     }
   }

@@ -15,7 +15,7 @@ describe('useCart', () => {
 
   it('종목을 담는다', () => {
     const { result } = renderHook(() => useCart())
-    act(() => result.current.add('005930', 2, 61200))
+    act(() => result.current.add('005930', 2, 61200, 'KRW'))
 
     expect(result.current.items).toHaveLength(1)
     expect(result.current.items[0]).toMatchObject({ code: '005930', qty: 2, addedPrice: 61200 })
@@ -24,8 +24,8 @@ describe('useCart', () => {
 
   it('이미 담은 종목은 수량만 더하고 담은 가격은 유지한다', () => {
     const { result } = renderHook(() => useCart())
-    act(() => result.current.add('005930', 2, 61200))
-    act(() => result.current.add('005930', 3, 63000))
+    act(() => result.current.add('005930', 2, 61200, 'KRW'))
+    act(() => result.current.add('005930', 3, 63000, 'KRW'))
 
     expect(result.current.items).toHaveLength(1)
     expect(result.current.items[0].qty).toBe(5)
@@ -34,7 +34,7 @@ describe('useCart', () => {
 
   it('수량을 바꾼다', () => {
     const { result } = renderHook(() => useCart())
-    act(() => result.current.add('005930', 2, 61200))
+    act(() => result.current.add('005930', 2, 61200, 'KRW'))
     act(() => result.current.setQty('005930', 7))
 
     expect(result.current.items[0].qty).toBe(7)
@@ -42,7 +42,7 @@ describe('useCart', () => {
 
   it('수량을 0 이하로 만들면 장바구니에서 뺀다', () => {
     const { result } = renderHook(() => useCart())
-    act(() => result.current.add('005930', 2, 61200))
+    act(() => result.current.add('005930', 2, 61200, 'KRW'))
     act(() => result.current.setQty('005930', 0))
 
     expect(result.current.items).toEqual([])
@@ -50,8 +50,8 @@ describe('useCart', () => {
 
   it('종목을 뺀다', () => {
     const { result } = renderHook(() => useCart())
-    act(() => result.current.add('005930', 2, 61200))
-    act(() => result.current.add('000660', 1, 205000))
+    act(() => result.current.add('005930', 2, 61200, 'KRW'))
+    act(() => result.current.add('000660', 1, 205000, 'KRW'))
     act(() => result.current.remove('005930'))
 
     expect(result.current.items.map((i) => i.code)).toEqual(['000660'])
@@ -59,7 +59,7 @@ describe('useCart', () => {
 
   it('전체를 비운다', () => {
     const { result } = renderHook(() => useCart())
-    act(() => result.current.add('005930', 2, 61200))
+    act(() => result.current.add('005930', 2, 61200, 'KRW'))
     act(() => result.current.clear())
 
     expect(result.current.items).toEqual([])
@@ -67,7 +67,7 @@ describe('useCart', () => {
 
   it('localStorage에 저장한다', () => {
     const { result } = renderHook(() => useCart())
-    act(() => result.current.add('005930', 2, 61200))
+    act(() => result.current.add('005930', 2, 61200, 'KRW'))
 
     const saved = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) ?? '[]')
     expect(saved[0]).toMatchObject({ code: '005930', qty: 2 })

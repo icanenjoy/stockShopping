@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:master": "node scripts/build-master.mjs"
   },
   "dependencies": {
     "next": "16.3.4",

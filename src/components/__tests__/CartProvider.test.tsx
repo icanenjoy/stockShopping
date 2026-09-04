@@ -10,7 +10,7 @@ beforeEach(() => {
 function Adder() {
   const cart = useCartContext()
   return (
-    <button type="button" onClick={() => cart.add('005930', 1, 61200)}>
+    <button type="button" onClick={() => cart.add('005930', 1, 61200, 'KRW')}>
       담기
     </button>
   )

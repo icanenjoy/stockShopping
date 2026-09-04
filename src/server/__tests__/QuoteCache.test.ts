@@ -10,6 +10,7 @@ function quote(code: string, price: number): Quote {
     prevClose: price,
     high52w: price * 2,
     tradingHalted: false,
+  currency: 'KRW',
     asOf: '2026-09-03T05:00:00.000Z',
   }
 }

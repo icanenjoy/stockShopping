@@ -1,8 +1,5 @@
-import type { PriceProvider } from './PriceProvider'
 import type { KisTokenManager } from './KisTokenManager'
 import type { StockSummary, Quote } from '@/domain/types'
-import { searchStocks } from '@/domain/search'
-import { STOCK_MASTER } from '@/data/stocks'
 
 const PRICE_PATH = '/uapi/domestic-stock/v1/quotations/inquire-price'
 const TR_ID_PRICE = 'FHKST01010100'
@@ -12,12 +9,11 @@ interface KisPriceBody {
   output?: Record<string, string | undefined>
 }
 
-export class KisKrxProvider implements PriceProvider {
+export class KisKrxProvider {
   private readonly tokenManager: KisTokenManager
   private readonly appKey: string
   private readonly appSecret: string
   private readonly baseUrl: string
-  private readonly master: StockSummary[]
   private readonly fetchFn: typeof fetch
 
   constructor(opts: {
@@ -25,33 +21,23 @@ export class KisKrxProvider implements PriceProvider {
     appKey: string
     appSecret: string
     baseUrl: string
-    master?: StockSummary[]
     fetchFn?: typeof fetch
   }) {
     this.tokenManager = opts.tokenManager
     this.appKey = opts.appKey
     this.appSecret = opts.appSecret
     this.baseUrl = opts.baseUrl.replace(/\/$/, '')
-    this.master = opts.master ?? STOCK_MASTER
     this.fetchFn = opts.fetchFn ?? fetch
   }
 
-  async search(query: string): Promise<StockSummary[]> {
-    return searchStocks(this.master, query)
-  }
-
   /** 한 종목이 실패해도 나머지는 살린다. 총액을 최대한 보여주는 쪽이 낫다 */
-  async getQuotes(codes: string[]): Promise<Quote[]> {
-    const stocks = codes
-      .map((code) => this.master.find((s) => s.code === code))
-      .filter((s): s is StockSummary => s !== undefined)
-
+  async getQuotes(stocks: StockSummary[]): Promise<Quote[]> {
     const settled = await Promise.allSettled(stocks.map((s) => this.fetchQuote(s)))
 
     // 실패 사유를 통째로 버리면 잘못된 앱키·만료된 토큰·KIS 장애가 서버에
     // 아무 흔적도 남기지 않는다. 화면에는 여전히 "시세 지연"만 뜬다.
     for (const result of settled) {
-      if (result.status === 'rejected') console.error('[kis] 시세 조회 실패', result.reason)
+      if (result.status === 'rejected') console.error('[kis:국내] 시세 조회 실패', result.reason)
     }
 
     return settled
@@ -98,6 +84,7 @@ export class KisKrxProvider implements PriceProvider {
       prevClose: num(output.stck_sdpr),
       high52w: num(output.w52_hgpr),
       tradingHalted: output.temp_stop_yn === 'Y',
+      currency: 'KRW',
       asOf: new Date().toISOString(),
     }
   }

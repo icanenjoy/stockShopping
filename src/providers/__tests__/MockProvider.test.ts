@@ -3,8 +3,8 @@ import { MockProvider } from '@/providers/MockProvider'
 import type { StockSummary } from '@/domain/types'
 
 const master: StockSummary[] = [
-  { code: '005930', name: '삼성전자', market: 'KOSPI' },
-  { code: '000660', name: 'SK하이닉스', market: 'KOSPI' },
+  { code: '005930', name: '삼성전자', market: 'KOSPI', currency: 'KRW' },
+  { code: '000660', name: 'SK하이닉스', market: 'KOSPI', currency: 'KRW' },
 ]
 
 describe('MockProvider', () => {
@@ -48,6 +48,17 @@ describe('MockProvider', () => {
       expect(q.price).toBeLessThanOrEqual(q.high52w)
       expect(Number.isInteger(q.price)).toBe(true)
     }
+  })
+
+  it('달러 종목은 달러다운 자릿수로 만든다 — 20만 달러짜리 애플은 가짜가 아니라 버그로 읽힌다', async () => {
+    const usd: StockSummary[] = [
+      { code: 'AAPL', name: '애플', englishName: 'APPLE INC', market: 'NAS', currency: 'USD' },
+    ]
+    const [q] = await new MockProvider({ master: usd, now: () => 0 }).getQuotes(['AAPL'])
+
+    expect(q.currency).toBe('USD')
+    expect(q.price).toBeLessThan(1_000)
+    expect(q.price).toBeGreaterThan(0)
   })
 
   it('asOf는 now를 따른다', async () => {

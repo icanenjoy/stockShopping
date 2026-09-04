@@ -5,6 +5,7 @@ import {
   changeSinceAdded,
   lineSubtotal,
   cartTotal,
+  groupCartByCurrency,
 } from '@/domain/pricing'
 import type { Quote, CartItem } from '@/domain/types'
 
@@ -16,6 +17,7 @@ function quote(over: Partial<Quote> = {}): Quote {
     prevClose: 62600,
     high52w: 85000,
     tradingHalted: false,
+    currency: 'KRW',
     asOf: '2026-09-03T05:00:00.000Z',
     ...over,
   }
@@ -80,8 +82,8 @@ describe('lineSubtotal', () => {
 
 describe('cartTotal', () => {
   const items: CartItem[] = [
-    { code: '005930', qty: 2, addedPrice: 61000, addedAt: '2026-09-03T04:00:00.000Z' },
-    { code: '000660', qty: 1, addedPrice: 200000, addedAt: '2026-09-03T04:00:00.000Z' },
+    { code: '005930', qty: 2, addedPrice: 61000, currency: 'KRW', addedAt: '2026-09-03T04:00:00.000Z' },
+    { code: '000660', qty: 1, addedPrice: 200000, currency: 'KRW', addedAt: '2026-09-03T04:00:00.000Z' },
   ]
 
   it('모든 행의 소계를 더한다', () => {
@@ -107,5 +109,62 @@ describe('cartTotal', () => {
 
   it('빈 장바구니는 0이다', () => {
     expect(cartTotal([], {})).toBe(0)
+  })
+})
+
+describe('groupCartByCurrency', () => {
+  const krw: CartItem[] = [
+    { code: '005930', qty: 2, addedPrice: 61000, currency: 'KRW', addedAt: '2026-09-03T04:00:00.000Z' },
+    { code: '000660', qty: 1, addedPrice: 200000, currency: 'KRW', addedAt: '2026-09-03T04:00:00.000Z' },
+  ]
+  const usd: CartItem[] = [
+    { code: 'AAPL', qty: 3, addedPrice: 320, currency: 'USD', addedAt: '2026-09-03T04:00:00.000Z' },
+  ]
+  const quotes = {
+    '005930': quote({ price: 61200 }),
+    '000660': quote({ code: '000660', name: 'SK하이닉스', price: 205000 }),
+    AAPL: quote({ code: 'AAPL', name: '애플', price: 328.21, currency: 'USD' }),
+  }
+
+  it('통화별로 나눠 각각의 총액을 낸다 — 원화와 달러를 더하면 아무 뜻도 없는 숫자가 된다', () => {
+    const groups = groupCartByCurrency([...krw, ...usd], quotes)
+    expect(groups.map((g) => g.currency)).toEqual(['KRW', 'USD'])
+    expect(groups[0].total).toBe(61200 * 2 + 205000)
+    expect(groups[1].total).toBeCloseTo(328.21 * 3, 6)
+  })
+
+  it('담은 순서가 섞여 있어도 통화별로 모은다', () => {
+    const groups = groupCartByCurrency([krw[0], usd[0], krw[1]], quotes)
+    expect(groups.map((g) => g.items.map((i) => i.code))).toEqual([['005930', '000660'], ['AAPL']])
+  })
+
+  it('원화는 달러보다 앞에 온다 — 탭 순서가 매번 달라지면 안 된다', () => {
+    expect(groupCartByCurrency([...usd, ...krw], quotes).map((g) => g.currency)).toEqual([
+      'KRW',
+      'USD',
+    ])
+  })
+
+  it('항목이 없는 통화는 탭 자체를 만들지 않는다', () => {
+    expect(groupCartByCurrency(krw, quotes).map((g) => g.currency)).toEqual(['KRW'])
+  })
+
+  it('통화별로 시세 없는 종목 수를 따로 센다', () => {
+    const partial = { '005930': quote({ price: 61200 }) }
+    const groups = groupCartByCurrency([...krw, ...usd], partial)
+    expect(groups[0].unpricedCount).toBe(1)
+    expect(groups[1].unpricedCount).toBe(1)
+  })
+
+  it('거래정지는 시세는 있으므로 총액에서만 빠지고 시세 없음으로 세지 않는다', () => {
+    const halted = { ...quotes, '000660': quote({ code: '000660', price: 205000, tradingHalted: true }) }
+    const groups = groupCartByCurrency(krw, halted)
+    expect(groups[0].total).toBe(122400)
+    expect(groups[0].unpricedCount).toBe(0)
+    expect(groups[0].countedCount).toBe(1)
+  })
+
+  it('빈 장바구니는 빈 배열이다', () => {
+    expect(groupCartByCurrency([], {})).toEqual([])
   })
 })

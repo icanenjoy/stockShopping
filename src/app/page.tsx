@@ -24,7 +24,7 @@ export default function HomePage() {
           type="search"
           role="searchbox"
           aria-label="종목 검색"
-          placeholder="삼성전자, 005930 …"
+          placeholder="삼성전자, 애플, AAPL …"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base outline-none focus:border-slate-900"
@@ -57,7 +57,7 @@ export default function HomePage() {
             return (
               <li key={stock.code}>
                 {quote ? (
-                  <StockCard quote={quote} onAdd={add} />
+                  <StockCard stock={stock} quote={quote} onAdd={add} />
                 ) : (
                   <div className="h-48 animate-pulse rounded-xl border border-slate-200 bg-white" />
                 )}

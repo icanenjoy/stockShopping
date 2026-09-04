@@ -30,6 +30,7 @@ const SAMSUNG = {
   prevClose: 62600,
   high52w: 85000,
   tradingHalted: false,
+  currency: 'KRW',
   asOf: '2026-09-03T05:00:00.000Z',
 }
 
@@ -40,6 +41,7 @@ const HYNIX = {
   prevClose: 198000,
   high52w: 260000,
   tradingHalted: false,
+  currency: 'KRW',
   asOf: '2026-09-03T05:00:00.000Z',
 }
 
@@ -231,5 +233,98 @@ describe('장바구니 화면', () => {
     const total = await screen.findByTestId('cart-total')
     await waitFor(() => expect(total).toHaveTextContent(/거래정지/))
     expect(total).not.toHaveTextContent('0원')
+  })
+})
+
+describe('장바구니 화면 — 통화별 탭', () => {
+  const APPLE = {
+    code: 'AAPL',
+    name: '애플',
+    price: 328.21,
+    prevClose: 324.96,
+    high52w: 344.27,
+    tradingHalted: false,
+    currency: 'USD',
+    asOf: '2026-09-04T05:00:00.000Z',
+  }
+
+  function seedMixed() {
+    localStorage.setItem(
+      CART_STORAGE_KEY,
+      JSON.stringify([
+        { code: '005930', qty: 2, addedPrice: 60000, currency: 'KRW', addedAt: '2026-09-03T04:00:00.000Z' },
+        { code: 'AAPL', qty: 3, addedPrice: 320, currency: 'USD', addedAt: '2026-09-03T04:00:00.000Z' },
+      ]),
+    )
+  }
+
+  it('통화가 섞이면 탭으로 나눈다', async () => {
+    seedMixed()
+    stubQuotesBody([SAMSUNG, APPLE])
+    render(
+      <CartProvider>
+        <CartPage />
+      </CartProvider>,
+    )
+
+    expect(await screen.findByRole('tab', { name: /원화/ })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /미국달러/ })).toBeInTheDocument()
+  })
+
+  it('원화 탭이 먼저 열리고 원화 총액만 보여준다 — 달러를 더하면 뜻 없는 숫자가 된다', async () => {
+    seedMixed()
+    stubQuotesBody([SAMSUNG, APPLE])
+    render(
+      <CartProvider>
+        <CartPage />
+      </CartProvider>,
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-total')).toHaveTextContent('122,400원'),
+    )
+    expect(screen.getByText('삼성전자')).toBeInTheDocument()
+    expect(screen.queryByText('애플')).not.toBeInTheDocument()
+  })
+
+  it('달러 탭을 누르면 달러 총액으로 바뀐다', async () => {
+    seedMixed()
+    stubQuotesBody([SAMSUNG, APPLE])
+    render(
+      <CartProvider>
+        <CartPage />
+      </CartProvider>,
+    )
+
+    await userEvent.click(await screen.findByRole('tab', { name: /미국달러/ }))
+
+    await waitFor(() => expect(screen.getByTestId('cart-total')).toHaveTextContent('$984.63'))
+    expect(screen.getByText('애플')).toBeInTheDocument()
+    expect(screen.queryByText('삼성전자')).not.toBeInTheDocument()
+  })
+
+  it('다른 탭에 무엇이 남아 있는지 알려준다 — 탭만 있으면 총액이 전부인 줄 안다', async () => {
+    seedMixed()
+    stubQuotesBody([SAMSUNG, APPLE])
+    render(
+      <CartProvider>
+        <CartPage />
+      </CartProvider>,
+    )
+
+    expect(await screen.findByText(/통화가 다르면 총액을 합치지 않습니다/)).toBeInTheDocument()
+  })
+
+  it('한 통화만 담겼으면 탭을 만들지 않는다 — 원화만 담은 사람에게 탭은 소음이다', async () => {
+    seedCart()
+    stubQuotes()
+    render(
+      <CartProvider>
+        <CartPage />
+      </CartProvider>,
+    )
+
+    await screen.findByTestId('cart-total')
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
 })

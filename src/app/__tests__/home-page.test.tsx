@@ -20,7 +20,7 @@ function stubApi() {
       const url = String(input)
       if (url.startsWith('/api/search')) {
         return new Response(
-          JSON.stringify({ stocks: [{ code: '005930', name: '삼성전자', market: 'KOSPI' }] }),
+          JSON.stringify({ stocks: [{ code: '005930', name: '삼성전자', market: 'KOSPI', currency: 'KRW' }] }),
           { status: 200 },
         )
       }
@@ -34,6 +34,7 @@ function stubApi() {
               prevClose: 62600,
               high52w: 85000,
               tradingHalted: false,
+              currency: 'KRW',
               asOf: '2026-09-03T05:00:00.000Z',
             },
           ],
